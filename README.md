@@ -7,7 +7,7 @@ All my COAL / 8088 Assembly Language assignments live in this repo, one folder p
 
 ## Programs
 
-### Assignment1: Q4 Observation Classifier
+### Assignment2: Q4 Observation Classifier
 
 A 16 bit 8088 program that classifies network observations as Normal, Suspicious or Attack using a small weighted scoring model.
 
@@ -16,7 +16,7 @@ A 16 bit 8088 program that classifies network observations as Normal, Suspicious
 - The class with the highest score wins, and the result is stored per observation in `predFlag` (1 = Normal, 2 = Suspicious, 3 = Attack).
 - The program loops over all observations in the `obs` table.
 
-### Assignment2: Q2 Text Viewport Manager with Windowed Scrolling and Live Keyword Highlighter
+### Assignment3: Q2 Text Viewport Manager with Windowed Scrolling and Live Keyword Highlighter
 
 A 16 bit 8088 program that builds a text viewer straight into video memory (0xB800).
 
@@ -36,13 +36,13 @@ The program waits for a keypress before scrolling, so you can see the window bot
 
 ## How to assemble and run
 
-Assignment 1:
+Assignment 2:
 
 ```
 nasm q4.asm -o q4.com
 ```
 
-Assignment 2:
+Assignment 3:
 
 ```
 nasm q2.asm -o q2.com
@@ -51,36 +51,36 @@ nasm q2.asm -o q2.com
 Then in DOSBox (swap the folder and file name for the other assignment):
 
 ```
-mount c path\to\COAL\Assignment2
+mount c path\to\COAL\Assignment3
 c:
 q2.com
 ```
 
-For Assignment 2, press any key once to scroll, and once more to exit.
+For Assignment 3, press any key once to scroll, and once more to exit.
 
 ## Folder structure
 
 ```
 COAL/
 ├── README.md
-├── Assignment1/
+├── Assignment2/
 │   ├── q4.asm
 │   └── screenshots/
 │       └── q4_output.png
-└── Assignment2/
+└── Assignment3/
     ├── q2.asm
     └── screenshots/
         ├── before_scroll.png
-        └── after_highlight.png
+        └── after_scroll.png
 ```
 
 ## Output screenshots
 
-### Assignment 1
+### Assignment 2
 
 ![q4 output](Assignment2/screenshots/q4_output.png)
 
-### Assignment 2
+### Assignment 3
 
 Before scrolling:
 
