@@ -78,14 +78,14 @@ COAL/
 
 ### Assignment 1
 
-![q4 output](Assignment1/screenshots/q4_output.png)
+![q4 output](Assignment2/screenshots/q4_output.png)
 
 ### Assignment 2
 
 Before scrolling:
 
-![before scroll](Assignment2/screenshots/before_scroll.png)
+![before scroll](Assignment3/screenshots/before_scroll.png)
 
-After scrolling and highlighting:
+After scrolling:
 
-![after highlight](Assignment2/screenshots/after_highlight.png)
+![after highlight](Assignment3/screenshots/after_highlight.png)
