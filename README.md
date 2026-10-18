@@ -88,4 +88,4 @@ Before scrolling:
 
 After scrolling:
 
-![after highlight](Assignment3/screenshots/after_highlight.png)
+![after highlight](Assignment3/screenshots/after_scroll.png)
