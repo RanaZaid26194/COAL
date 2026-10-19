@@ -1,32 +1,10 @@
-;text viewport manager w/ window scroll + live keyword highlighter
-
+;Q2 - text viewport manager w/ window scroll + live keyword highlighter
+;Github Link: github.com/RanaZaid26194/COAL
 [ORG 0x100]
 JMP start
 
-TOP:        equ 3
-LEFT:       equ 8
-BOTTOM:     equ 21
-RIGHT:      equ 72
-
-TOP_PAD:     equ 2               ;border row + title row above the text
-SIDE_PAD:    equ 2               ;margin on both sides (+2 / -2)
-BOT_PAD:     equ 1               ;just the border row below the text
-TXT_TOP:     equ TOP + TOP_PAD   ;first text row
-TXT_BOTTOM:  equ BOTTOM - BOT_PAD
-TXT_LEFT:    equ LEFT + SIDE_PAD
-TXT_RIGHT:   equ RIGHT - SIDE_PAD
-VISIBLE:     equ TXT_BOTTOM - TXT_TOP + 1
-SCROLL_BY:   equ 2
-
-BORDER_ATTR: equ 0x0B
-TITLE_ATTR:  equ 0x1E            ;yellow on blue
-TEXT_ATTR:   equ 0x07
-HILITE_ATTR: equ 0xCE            ;blinking yellow on red
-STATUS_ATTR: equ 0x0F
-STATUS_ROW:  equ 23
-HINT_ROW:    equ 24
-
-nextLine:   dw 0                 ;next doc line to show
+docLines:   dw 30
+nextLine:   dw 0 ;next doc line to show
 scrollN:    dw 0
 newRow:     dw 0
 
@@ -37,7 +15,6 @@ statusBlank: db '                                                  ', 0
 statusA:    db 'Total Matches Found: ', 0
 statusB:    db ' | Viewport Status: ACTIVE', 0
 
-;keep each line under 61 chars or it gets cut, and use " " quotes if the line has an apostrophe
 L00: db 'The lab was almost empty by the time I got the border to draw', 0
 L01: db 'properly, just me  and a  guy asleep near  the window.  Every', 0
 L02: db 'attempt before  that had  left some  stray character  in  the', 0
@@ -72,123 +49,121 @@ L29: db 'the window scrolls fine now and I can go home.', 0
 docTable: dw L00, L01, L02, L03, L04, L05, L06, L07, L08, L09
           dw L10, L11, L12, L13, L14, L15, L16, L17, L18, L19
           dw L20, L21, L22, L23, L24, L25, L26, L27, L28, L29
-docEnd:
-DOCLINES:    equ (docEnd - docTable) / 2   ;counts the doc lines by itself
-
-;row,col -> di = (row*80+col)*2 is written out each time it is needed (ax n dx get trashed)
 
 start:
-	mov ax, 0x0720
+	mov ax, 0x0720 ;blank cell, grey on black
 	push ax
 	call clear_screen
 
-	mov ax, TOP
+	mov ax, 3 ;top row
 	push ax
-	mov ax, LEFT
+	mov ax, 8 ;left col
 	push ax
-	mov ax, BOTTOM
+	mov ax, 21 ;bottom row
 	push ax
-	mov ax, RIGHT
+	mov ax, 72 ;right col
 	push ax
-	mov ax, BORDER_ATTR
+	mov ax, 0x0B ;border color
 	push ax
 	call draw_window
 
-	mov ax, TOP + 1		;title goes on the row under the border so border stays whole
+	mov ax, 4 ;title goes on the row under the border so border stays whole
 	push ax
-	mov ax, LEFT + 1
+	mov ax, 9 ;center between col 9 ...
 	push ax
-	mov ax, RIGHT - 1
+	mov ax, 71 ;... and col 71
 	push ax
 	mov ax, titleStr
 	push ax
-	mov ax, TITLE_ATTR
+	mov ax, 0x1E ;yellow on blue
 	push ax
 	call show_title
 
 	;1st page of the doc
-	mov ax, DOCLINES	;doc shorter than the window? then show only what exists
-	cmp ax, VISIBLE
+	mov ax, [docLines] ;doc shorter than the window? then show only what exists
+	cmp ax, 16 ;16 text rows fit in the window
 	jbe first_count_ok
-	mov ax, VISIBLE
+	mov ax, 16
 first_count_ok:
 	mov [nextLine], ax
 
-	mov ax, TXT_TOP
+	mov ax, 5 ;first text row
 	push ax
-	mov ax, 0
+	mov ax, 0 ;start from doc line 0
 	push ax
-	push word [nextLine]
-	mov ax, TXT_LEFT
+	push word [nextLine] ;how many lines
+	mov ax, 10 ;left margin col (8+2)
 	push ax
-	mov ax, TXT_RIGHT
+	mov ax, 70 ;right margin col (72-2)
 	push ax
 	call stream_lines
 
-	mov ah, 2		;cursor down to the last row
+	mov ah, 2 ;cursor down to the last row
 	xor bh, bh
 	mov dx, 0x1800
 	int 0x10
 
-	mov ax, HINT_ROW
+	sub sp, 2 ;room for the result
+	mov ax, 24 ;row 24, last line of screen
 	push ax
-	mov ax, LEFT
+	mov ax, 8
 	push ax
 	mov ax, hint
 	push ax
 	mov ax, 0x07
 	push ax
 	call print_string
+	add sp, 2 ;dont need the result
 
 	;highlight + status right away, no need to wait for a key
 	mov ax, keyword
 	push ax
-	mov ax, HILITE_ATTR
+	mov ax, 0xCE ;blinking yellow on red
 	push ax
 	call refresh_view
 
 key_loop:
-	mov ah, 0		;wait 4 a key
+	mov ah, 0 ;wait 4 a key
 	int 0x16
-	cmp al, 27		;esc
+	cmp al, 27 ;esc
 	jne key_not_esc
 	jmp key_exit
 key_not_esc:
 	mov ax, [nextLine]
-	cmp ax, DOCLINES
+	cmp ax, [docLines]
 	jb key_have_lines
-	jmp key_exit		;doc is over
+	jmp key_exit ;doc is over
 key_have_lines:
-	mov bx, DOCLINES	;how many lines are left to show
+	mov bx, [docLines] ;how many lines are left to show
 	sub bx, ax
-	cmp bx, SCROLL_BY
+	cmp bx, 2 ;scroll 2 lines per key
 	jbe key_n_ready
-	mov bx, SCROLL_BY	;only scroll as much as there is left
+	mov bx, 2 ;only scroll as much as there is left
 key_n_ready:
 	mov [scrollN], bx
 
 	;scroll just the text part, border stays put
-	mov ax, TOP
+	mov ax, 3
 	push ax
-	mov ax, LEFT
+	mov ax, 8
 	push ax
-	mov ax, BOTTOM
+	mov ax, 21
 	push ax
-	mov ax, RIGHT
+	mov ax, 72
 	push ax
 	push word [scrollN]
 	call scroll_window_up
 
-	mov ax, TXT_BOTTOM + 1	;new lines go in the empty rows at the bottom
+	mov ax, 21 ;row after the last text row (20), minus n = 1st empty row
 	sub ax, [scrollN]
 	mov [newRow], ax
 
 	push word [newRow]
 	push word [nextLine]
 	push word [scrollN]
-	mov ax, TXT_LEFT
+	mov ax, 10
 	push ax
-	mov ax, TXT_RIGHT
+	mov ax, 70
 	push ax
 	call stream_lines
 
@@ -197,13 +172,13 @@ key_n_ready:
 
 	mov ax, keyword
 	push ax
-	mov ax, HILITE_ATTR
+	mov ax, 0xCE
 	push ax
 	call refresh_view
 	jmp key_loop
 
 key_exit:
-	mov ah, 2		;cursor on last row again so the prompt stays out of the window
+	mov ah, 2 ;cursor on last row again so the prompt stays out of the window
 	xor bh, bh
 	mov dx, 0x1800
 	int 0x10
@@ -218,18 +193,20 @@ refresh_view:
 	push bp
 	mov bp, sp
 	push ax
+	sub sp, 2 ;room for the match count
 
-	mov ax, TOP
+	mov ax, 3
 	push ax
-	mov ax, LEFT
+	mov ax, 8
 	push ax
-	mov ax, BOTTOM
+	mov ax, 21
 	push ax
-	mov ax, RIGHT
+	mov ax, 72
 	push ax
 	push word [bp+6]
 	push word [bp+4]
-	call find_and_highlight	;ax = matches
+	call find_and_highlight
+	pop ax ;ax = matches
 
 	push ax
 	call show_status
@@ -249,44 +226,52 @@ show_status:
 	sub sp, 2
 	push ax
 
-	mov ax, STATUS_ROW		;wipe the old text first
+	sub sp, 2 ;wipe the old text first
+	mov ax, 23
 	push ax
-	mov ax, LEFT
+	mov ax, 8
 	push ax
 	mov ax, statusBlank
 	push ax
-	mov ax, STATUS_ATTR
+	mov ax, 0x0F
 	push ax
 	call print_string
+	add sp, 2
 
-	mov ax, STATUS_ROW
+	sub sp, 2
+	mov ax, 23
 	push ax
-	mov ax, LEFT
+	mov ax, 8
 	push ax
 	mov ax, statusA
 	push ax
-	mov ax, STATUS_ATTR
+	mov ax, 0x0F
 	push ax
 	call print_string
-	mov [bp-2], ax		;ax has the col where text ended
+	pop ax ;col where the text ended
+	mov [bp-2], ax
 
+	sub sp, 2
 	push word [bp+4]
-	mov ax, STATUS_ROW
+	mov ax, 23
 	push ax
 	push word [bp-2]
-	mov ax, STATUS_ATTR
+	mov ax, 0x0F
 	push ax
 	call printNum
-	add [bp-2], ax		;ax has no. of digits
+	pop ax ;no. of digits
+	add [bp-2], ax
 
-	mov ax, STATUS_ROW
+	sub sp, 2
+	mov ax, 23
 	push ax
 	push word [bp-2]
 	mov ax, statusB
 	push ax
-	mov ax, STATUS_ATTR
+	mov ax, 0x0F
 	push ax
 	call print_string
+	add sp, 2
 
 	pop ax
 	mov sp, bp
@@ -339,11 +324,11 @@ draw_window:
 
 	mov ax, [bp+6]
 	sub ax, [bp+10]
-	dec ax			;cols b/w the corners
+	dec ax ;cols b/w the corners
 	mov [bp-2], ax
 
 	;top line
-	mov ax, [bp+12]		;di = (row*80+col)*2
+	mov ax, [bp+12] ;di = (row*80+col)*2, same thing everywhere else
 	mov dx, 80
 	mul dx
 	add ax, [bp+10]
@@ -366,7 +351,7 @@ draw_window_side:
 	mov ax, [bp-4]
 	cmp ax, [bp+8]
 	jae draw_window_bottom
-	mov ax, [bp-4]		;di = (row*80+col)*2
+	mov ax, [bp-4]
 	mov dx, 80
 	mul dx
 	add ax, [bp+10]
@@ -375,7 +360,7 @@ draw_window_side:
 	mov ah, [bp+4]
 	mov al, 0xBA
 	stosw
-	mov ax, [bp-4]		;di = (row*80+col)*2
+	mov ax, [bp-4]
 	mov dx, 80
 	mul dx
 	add ax, [bp+6]
@@ -388,7 +373,7 @@ draw_window_side:
 	jmp draw_window_side
 
 draw_window_bottom:
-	mov ax, [bp+8]		;di = (row*80+col)*2
+	mov ax, [bp+8]
 	mov dx, 80
 	mul dx
 	add ax, [bp+10]
@@ -430,18 +415,17 @@ show_title:
 	mov ax, 0xB800
 	mov es, ax
 
-	mov si, [bp+6]		;count the chars first
-	xor cx, cx
+	mov si, [bp+6] ;count the chars first
+	mov word [bp-2], 0
 show_title_len:
 	lodsb
 	or al, al
 	jz show_title_got
-	inc cx
+	inc word [bp-2]
 	jmp show_title_len
 show_title_got:
-	mov [bp-2], cx
 
-	mov ax, [bp+8]		;centre = left + (width - len)/2
+	mov ax, [bp+8] ;centre = left + (width - len)/2
 	sub ax, [bp+10]
 	inc ax
 	sub ax, [bp-2]
@@ -449,7 +433,7 @@ show_title_got:
 	add ax, [bp+10]
 	mov [bp-4], ax
 
-	mov ax, [bp+12]		;di = (row*80+col)*2
+	mov ax, [bp+12]
 	mov dx, 80
 	mul dx
 	add ax, [bp-4]
@@ -496,7 +480,7 @@ stream_line:
 	inc ax
 	mov [bp-2], ax
 
-	mov ax, [bp+12]		;di = (row*80+col)*2
+	mov ax, [bp+12]
 	mov dx, 80
 	mul dx
 	add ax, [bp+10]
@@ -543,13 +527,13 @@ stream_lines_again:
 	cmp word [bp-6], 0
 	je stream_lines_done
 	mov bx, [bp-4]
-	shl bx, 1		;its a word table so idx*2
+	shl bx, 1 ;its a word table so idx*2
 	mov ax, [docTable + bx]
 	push word [bp-2]
 	push word [bp+6]
 	push word [bp+4]
 	push ax
-	mov ax, TEXT_ATTR
+	mov ax, 0x07
 	push ax
 	call stream_line
 	inc word [bp-2]
@@ -566,11 +550,12 @@ stream_lines_done:
 ;print_string - row, col, str offset, attr
 ;[bp+10]=row [bp+8]=col [bp+6]=str [bp+4]=attr
 ;locals: [bp-2]=chars printed
-;ax returns the col after the last char (so not saving ax)
+;[bp+12]=result slot, gets the col after the last char
 print_string:
 	push bp
 	mov bp, sp
 	sub sp, 2
+	push ax
 	push dx
 	push si
 	push di
@@ -580,7 +565,7 @@ print_string:
 	mov es, ax
 
 	mov word [bp-2], 0
-	mov ax, [bp+10]		;di = (row*80+col)*2
+	mov ax, [bp+10]
 	mov dx, 80
 	mul dx
 	add ax, [bp+8]
@@ -596,12 +581,14 @@ print_string_go:
 	inc word [bp-2]
 	jmp print_string_go
 print_string_fin:
+	mov ax, [bp+8]
+	add ax, [bp-2]
+	mov [bp+12], ax
 	pop es
 	pop di
 	pop si
 	pop dx
-	mov ax, [bp+8]
-	add ax, [bp-2]
+	pop ax
 	mov sp, bp
 	pop bp
 	ret 8
@@ -610,11 +597,12 @@ print_string_fin:
 ;params: value, row, col, attr
 ;[bp+10]=value [bp+8]=row [bp+6]=col [bp+4]=attr
 ;locals: [bp-2]=digit count
-;ax returns no. of digits (so not saving ax)
+;[bp+12]=result slot, gets the no. of digits
 printNum:
 	push bp
 	mov bp, sp
 	sub sp, 2
+	push ax
 	push bx
 	push cx
 	push dx
@@ -626,23 +614,23 @@ printNum:
 
 	mov ax, [bp+10]
 	mov bx, 10
-	xor cx, cx
+	mov word [bp-2], 0
 printNum_split:
 	xor dx, dx
 	div bx
-	push dx			;remainder = next digit, comes out backwards
-	inc cx
+	push dx ;remainder = next digit, comes out backwards
+	inc word [bp-2]
 	or ax, ax
 	jnz printNum_split
-	mov [bp-2], cx
 
-	mov ax, [bp+8]		;di = (row*80+col)*2
+	mov ax, [bp+8]
 	mov dx, 80
 	mul dx
 	add ax, [bp+6]
 	shl ax, 1
 	mov di, ax
 	mov ah, [bp+4]
+	mov cx, [bp-2]
 printNum_show:
 	pop dx
 	add dl, '0'
@@ -650,12 +638,14 @@ printNum_show:
 	stosw
 	loop printNum_show
 
+	mov ax, [bp-2]
+	mov [bp+12], ax
 	pop es
 	pop di
 	pop dx
 	pop cx
 	pop bx
-	mov ax, [bp-2]
+	pop ax
 	mov sp, bp
 	pop bp
 	ret 8
@@ -680,41 +670,41 @@ scroll_window_up:
 	push es
 	cld
 
-	mov ax, [bp+12]		;shrink the window down to the text area
-	add ax, TOP_PAD
+	mov ax, [bp+12] ;shrink the window down to the text area
+	add ax, 2
 	mov [bp-12], ax
 	mov ax, [bp+10]
-	add ax, SIDE_PAD
+	add ax, 2
 	mov [bp-14], ax
 	mov ax, [bp+8]
-	sub ax, BOT_PAD
+	sub ax, 1
 	mov [bp-16], ax
 	mov ax, [bp+6]
-	sub ax, SIDE_PAD
+	sub ax, 2
 	mov [bp-18], ax
 
 	mov ax, [bp-18]
 	sub ax, [bp-14]
 	inc ax
-	mov [bp-2], ax		;width in cells
+	mov [bp-2], ax ;width in cells
 
 	mov ax, [bp-16]
 	sub ax, [bp-12]
 	inc ax
-	mov [bp-8], ax		;height in rows
+	mov [bp-8], ax ;height in rows
 
 	mov ax, [bp+4]
 	cmp ax, [bp-8]
 	jbe scroll_window_up_nok
-	mov ax, [bp-8]		;n bigger than the window? just clear all of it
+	mov ax, [bp-8] ;n bigger than the window? just clear all of it
 scroll_window_up_nok:
 	mov [bp-10], ax
 
 	mov ax, [bp-8]
 	sub ax, [bp-10]
-	mov [bp-4], ax		;rows that stay
+	mov [bp-4], ax ;rows that stay
 
-	mov ax, 0xB800		;movsw needs ds n es both on video mem
+	mov ax, 0xB800 ;movsw needs ds n es both on video mem
 	mov ds, ax
 	mov es, ax
 
@@ -724,10 +714,10 @@ scroll_window_up_move:
 	cmp ax, [bp-4]
 	jae scroll_window_up_blank
 
-	mov bx, [bp-12]		;src row = top + n + i
+	mov bx, [bp-12] ;src row = top + n + i
 	add bx, [bp-10]
 	add bx, [bp-6]
-	mov ax, bx		;di = (row*80+col)*2
+	mov ax, bx
 	mov dx, 80
 	mul dx
 	add ax, [bp-14]
@@ -735,9 +725,9 @@ scroll_window_up_move:
 	mov di, ax
 	mov si, di
 
-	mov bx, [bp-12]		;dest row = top + i
+	mov bx, [bp-12] ;dest row = top + i
 	add bx, [bp-6]
-	mov ax, bx		;di = (row*80+col)*2
+	mov ax, bx
 	mov dx, 80
 	mul dx
 	add ax, [bp-14]
@@ -745,19 +735,19 @@ scroll_window_up_move:
 	mov di, ax
 
 	mov cx, [bp-2]
-	rep movsw		;char n attr move together
+	rep movsw ;char n attr move together
 	inc word [bp-6]
 	jmp scroll_window_up_move
 
 scroll_window_up_blank:
-	mov ax, [bp-12]		;empty rows start right after the ones that stayed
+	mov ax, [bp-12] ;empty rows start right after the ones that stayed
 	add ax, [bp-4]
 	mov [bp-6], ax
 scroll_window_up_clr:
 	mov ax, [bp-6]
 	cmp ax, [bp-16]
 	ja scroll_window_up_end
-	mov ax, [bp-6]		;di = (row*80+col)*2
+	mov ax, [bp-6]
 	mov dx, 80
 	mul dx
 	add ax, [bp-14]
@@ -790,11 +780,12 @@ scroll_window_up_end:
 ;locals: [bp-2]=key len   [bp-4]=match cnt   [bp-6]=cur row
 ;        [bp-8]=last start   [bp-10]=scan width   [bp-12]=idx in row
 ;        [bp-14]=video offset of row start   [bp-94 to bp-15]=row buffer (80 bytes, full screen width)
-;ax returns the match count (so not saving ax)
+;[bp+16]=result slot, gets the match count
 find_and_highlight:
 	push bp
 	mov bp, sp
 	sub sp, 94
+	push ax
 	push bx
 	push cx
 	push dx
@@ -804,43 +795,42 @@ find_and_highlight:
 	push es
 	cld
 
-	mov si, [bp+6]		;key len
-	xor cx, cx
+	mov si, [bp+6] ;key len
+	mov word [bp-2], 0
+	mov word [bp-4], 0
 find_and_highlight_klen:
 	lodsb
 	or al, al
 	jz find_and_highlight_kdone
-	inc cx
+	inc word [bp-2]
 	jmp find_and_highlight_klen
 find_and_highlight_kdone:
-	mov [bp-2], cx
-	mov word [bp-4], 0
-	or cx, cx
-	jnz find_and_highlight_haskey
-	jmp find_and_highlight_finish	;empty keyword, nothing to search
+	cmp word [bp-2], 0
+	jne find_and_highlight_haskey
+	jmp find_and_highlight_finish ;empty keyword, nothing to search
 find_and_highlight_haskey:
 
 	mov ax, [bp+8]
 	sub ax, [bp+12]
-	sub ax, SIDE_PAD * 2 - 1
-	mov [bp-10], ax		;cells b/w the side margins
+	sub ax, 3
+	mov [bp-10], ax ;cells b/w the side margins
 	sub ax, [bp-2]
-	mov [bp-8], ax		;last idx a match can start at (can go negative lol)
+	mov [bp-8], ax ;last idx a match can start at (can go negative)
 
 	mov ax, [bp+14]
-	add ax, TOP_PAD
-	mov [bp-6], ax		;first text row (under border + title)
+	add ax, 2
+	mov [bp-6], ax ;first text row (under border + title)
 
 find_and_highlight_rowloop:
 	mov ax, [bp-6]
 	cmp ax, [bp+10]
-	jb find_and_highlight_rowgo	;still rows left
-	jmp find_and_highlight_finish	;jae was too far for short jump so flipped it
+	jb find_and_highlight_rowgo ;still rows left
+	jmp find_and_highlight_finish ;jae was too far for short jump so flipped it
 find_and_highlight_rowgo:
 
 	mov bx, [bp+12]
-	add bx, SIDE_PAD	;1st text cell after the left margin
-	mov ax, [bp-6]		;di = (row*80+col)*2
+	add bx, 2 ;1st text cell after the left margin
+	mov ax, [bp-6]
 	mov dx, 80
 	mul dx
 	add ax, bx
@@ -850,17 +840,17 @@ find_and_highlight_rowgo:
 	mov si, di
 
 	mov ax, 0xB800
-	mov ds, ax		;ds on video so lodsw can read it
+	mov ds, ax ;ds on video so lodsw can read it
 	mov ax, ss
-	mov es, ax		;es on the stack buffer
+	mov es, ax ;es on the stack buffer
 	lea di, [bp-94]
 	mov cx, [bp-10]
 find_and_highlight_grab:
-	lodsw			;al = char, ah = attr
-	stosb			;only keep the char
+	lodsw ;al = char, ah = attr
+	stosb ;only keep the char
 	loop find_and_highlight_grab
 	mov ax, ss
-	mov ds, ax		;ds back to normal
+	mov ds, ax ;ds back to normal
 
 	mov word [bp-12], 0
 find_and_highlight_scan:
@@ -872,29 +862,27 @@ find_and_highlight_scan:
 	lea di, [bp-94]
 	add di, [bp-12]
 	mov cx, [bp-2]
-	repe cmpsb		;es is still the stack buffer
+	repe cmpsb ;es is still the stack buffer
 	jne find_and_highlight_miss
 
-	inc word [bp-4]		;found one, paint the attr bytes
+	inc word [bp-4] ;found one, paint the attr bytes
 	mov ax, 0xB800
 	mov es, ax
 	mov di, [bp-14]
 	mov ax, [bp-12]
 	shl ax, 1
 	add di, ax
-	inc di			;+1 so we land on attr
+	inc di ;+1 so we land on attr
 	mov cx, [bp-2]
 	mov al, [bp+4]
 find_and_highlight_paint:
 	stosb
-	inc di			;skip the next char byte
+	inc di ;skip the next char byte
 	loop find_and_highlight_paint
 
-	mov ax, ss		;es back to buffer for next compare
+	mov ax, ss ;es back to buffer for next compare
 	mov es, ax
-	mov ax, [bp-12]		;jump past this match so they dont overlap
-	add ax, [bp-2]
-	mov [bp-12], ax
+	inc word [bp-12] ;move on by 1 so overlapping matches count too
 	jmp find_and_highlight_scan
 find_and_highlight_miss:
 	inc word [bp-12]
@@ -905,6 +893,8 @@ find_and_highlight_nextrow:
 	jmp find_and_highlight_rowloop
 
 find_and_highlight_finish:
+	mov ax, [bp-4]
+	mov [bp+16], ax
 	pop es
 	pop ds
 	pop di
@@ -912,7 +902,7 @@ find_and_highlight_finish:
 	pop dx
 	pop cx
 	pop bx
-	mov ax, [bp-4]
+	pop ax
 	mov sp, bp
 	pop bp
 	ret 12
